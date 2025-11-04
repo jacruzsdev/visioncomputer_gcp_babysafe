@@ -1,0 +1,5 @@
+Django
+gunicorn
+google-cloud-aiplatform
+pillow
+dj-database-url

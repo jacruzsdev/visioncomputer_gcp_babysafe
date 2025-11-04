@@ -1,0 +1,36 @@
+{% extends "detector/base.html" %}
+
+{% block title %}Detector | Guardia Infantil AI{% endblock %}
+
+{% block content %}
+<header class="text-center mb-5">
+    <h1 class="display-4">🔎 Detector de Peligros</h1>
+    <p class="lead">Suba una imagen y el sistema de IA determinará si hay objetos peligrosos.</p>
+</header>
+
+<section class="mb-5">
+    <h3 class="mb-3">Analizar Imagen</h3>
+    <form action="{% url 'predict_safety' %}" method="post" enctype="multipart/form-data" class="p-4 border rounded shadow-sm">
+        {% csrf_token %}
+        <div class="mb-4">
+            <label for="image_file" class="form-label h5">Seleccionar Archivo de Imagen</label>
+            <input class="form-control form-control-lg" type="file" id="image_file" name="image_file" accept="image/*" required>
+        </div>
+        <button type="submit" class="btn btn-success btn-lg w-100">Analizar Seguridad</button>
+    </form>
+</section>
+
+{% if prediction_result %}
+<section class="result-box {% if is_safe %}safe{% else %}unsafe{% endif %} shadow">
+    <h3 class="mb-3">Resultado del Análisis</h3>
+    <p class="h4">{{ prediction_result }}</p>
+    {% if is_safe %}
+        <p>✅ **Verificación Completa:** El área parece estar despejada de objetos peligrosos detectados por la IA.</p>
+    {% else %}
+        <p>⚠️ **Advertencia de Seguridad:** Se detectaron riesgos. **Retire el objeto o asegure el área inmediatamente.**</p>
+    {% endif %}
+</section>
+{% endif %}
+
+<a href="{% url 'history' %}" class="btn btn-secondary mt-4">📜 Ver Historial de Consultas</a>
+{% endblock content %}

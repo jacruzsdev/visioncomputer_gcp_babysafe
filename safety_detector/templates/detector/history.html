@@ -1,0 +1,45 @@
+{% extends "detector/base.html" %}
+
+{% block title %}Historial | Guardia Infantil AI{% endblock %}
+
+{% block content %}
+<header class="text-center mb-5">
+    <h1 class="display-4">📜 Historial de Consultas</h1>
+    <p class="lead">Resultados de análisis de seguridad de su sesión actual.</p>
+</header>
+
+{% if history %}
+    <a href="{% url 'clear_history' %}" class="btn btn-danger mb-4 float-end">Borrar Historial de Sesión</a>
+    <div class="clearfix"></div>
+
+    <div class="row row-cols-1 g-4">
+        {% for entry in history %}
+        <div class="col">
+            <div class="card shadow-sm border-{% if entry.is_safe %}success{% else %}danger{% endif %}">
+                <div class="card-body row align-items-center">
+                    <div class="col-md-3 text-center">
+                        <h6 class="text-muted">Analizado el:</h6>
+                        <p class="small">{{ entry.timestamp }}</p>
+                        <img src="data:image/jpeg;base64,{{ entry.image_b64 }}" class="img-fluid rounded border" alt="Imagen Analizada">
+                    </div>
+                    <div class="col-md-9">
+                        <div class="p-3 result-box {% if entry.is_safe %}safe{% else %}unsafe{% endif %}">
+                            <h5 class="card-title">Resultado de Seguridad:</h5>
+                            <p class="mb-0 h5">{{ entry.result }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+{% else %}
+    <div class="alert alert-info text-center py-4" role="alert">
+        <h4 class="alert-heading">Historial Vacío</h4>
+        Aún no hay consultas en el historial de su sesión. Vaya al detector para comenzar a analizar imágenes.
+    </div>
+{% endif %}
+
+<a href="{% url 'predict_safety' %}" class="btn btn-primary mt-4">↩️ Volver al Detector</a>
+{% endblock content %}
