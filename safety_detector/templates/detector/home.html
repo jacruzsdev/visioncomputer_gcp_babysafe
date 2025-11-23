@@ -1,0 +1,33 @@
+{% extends "detector/base.html" %}
+
+{% block title %}Inicio | Guardia Infantil AI{% endblock %}
+
+{% block content %}
+<header class="text-center mb-5">
+    <h1 class="display-3">🛡️ **Guardia Infantil AI**</h1>
+    <p class="lead">Sistema de Detección de Peligros para Bebés (Impulsado por Vertex AI).</p>
+    <p class="text-muted">Seleccione una opción para continuar:</p>
+</header>
+
+<section class="row g-4 justify-content-center">
+    <div class="col-md-5 col-lg-4">
+        <div class="card shadow-lg h-100 border-primary">
+            <div class="card-body text-center">
+                <h5 class="card-title display-5 text-primary">🔎 Detector de Objetos</h5>
+                <p class="card-text lead mt-3">Escanear una imagen para identificar objetos peligrosos en el entorno de su bebé.</p>
+                <a href="{% url 'predict_safety' %}" class="btn btn-primary btn-lg mt-3 w-75">Ir al Detector</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-5 col-lg-4">
+        <div class="card shadow-lg h-100 border-secondary">
+            <div class="card-body text-center">
+                <h5 class="card-title display-5 text-secondary">📜 Historial de Consultas</h5>
+                <p class="card-text lead mt-3">Revise los resultados de seguridad de las imágenes analizadas en su sesión actual.</p>
+                <a href="{% url 'history' %}" class="btn btn-secondary btn-lg mt-3 w-75">Ver Historial</a>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock content %}
