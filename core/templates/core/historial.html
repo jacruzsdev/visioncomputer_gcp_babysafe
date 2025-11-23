@@ -1,0 +1,124 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+<h2 class="text-center mb-4">Historial Privado de Clasificación</h2>
+<p class="text-muted text-center small">Solo se muestran los registros de **imágenes analizadas** por tu sesión.</p>
+
+<div id="historial-loading" class="text-center mt-5">
+    <div class="spinner-border text-primary" role="status"></div>
+    <p class="mt-2">Cargando historial...</p>
+</div>
+
+<div id="historial-table-container" class="table-responsive" style="display:none;">
+    <table class="table table-striped table-hover align-middle text-center">
+        <thead class="table-dark">
+            <tr>
+                <th scope="col">Fecha</th>
+                <th scope="col">Imagen Analizada</th>
+                <th scope="col">Resultado Vertex IA</th>
+            </tr>
+        </thead>
+        <tbody id="historial-body">
+            <!-- Filas inyectadas por JS -->
+        </tbody>
+    </table>
+</div>
+
+<div id="historial-empty" class="alert alert-warning text-center mt-5" role="alert" style="display:none;">
+    <h4 class="alert-heading">Sin registros privados</h4>
+    <p>Aún no has subido imágenes en esta sesión o no tienes historial guardado.</p>
+    <hr>
+    <a href="{% url 'clasificacion' %}" class="btn btn-primary">Ir a clasificar una imagen</a>
+</div>
+
+<script type="module">
+    import { collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    const loading = document.getElementById('historial-loading');
+    const tableContainer = document.getElementById('historial-table-container');
+    const emptyMessage = document.getElementById('historial-empty');
+    const tbody = document.getElementById('historial-body');
+
+    async function loadUserHistory() {
+        loading.style.display = 'block';
+        tableContainer.style.display = 'none';
+        emptyMessage.style.display = 'none';
+        tbody.innerHTML = '';
+        
+        // La ruta de colección privada: /artifacts/{appId}/users/{userId}/historial_analisis
+        const path = `/artifacts/${window.appId}/users/${window.userId}/historial_analisis`;
+        
+        try {
+            // Asegúrate de que window.db esté disponible antes de usar collection()
+            if (!window.db) {
+                 throw new Error("La instancia de Firestore (window.db) no está disponible.");
+            }
+
+            const q = query(
+                collection(window.db, path),
+                where("userId", "==", window.userId)
+            );
+            
+            const querySnapshot = await getDocs(q);
+            const registros = [];
+            querySnapshot.forEach(doc => {
+                registros.push(doc.data());
+            });
+
+            loading.style.display = 'none';
+
+            if (registros.length === 0) {
+                emptyMessage.style.display = 'block';
+                return;
+            }
+
+            // Ordenar por fecha (más reciente primero)
+            registros.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+            registros.forEach(reg => {
+                // Solo mostrar si tiene una URL de imagen válida
+                if (reg.imagen_url) {
+                    const date = new Date(reg.fecha).toLocaleString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    
+                    const row = `
+                        <tr>
+                            <td>${date}</td>
+                            <td>
+                                <a href="${reg.imagen_url}" target="_blank">
+                                    <img src="${reg.imagen_url}" alt="Imagen analizada" style="height: 80px; width: auto; border-radius: 5px; border: 1px solid #ddd;">
+                                </a>
+                            </td>
+                            <td class="text-start">${reg.respuesta_modelo}</td>
+                        </tr>
+                    `;
+                    tbody.innerHTML += row;
+                }
+            });
+
+            tableContainer.style.display = 'block';
+
+        } catch (error) {
+            console.error("Error al cargar el historial desde Firestore:", error);
+            loading.style.display = 'none';
+            emptyMessage.style.display = 'block';
+            emptyMessage.querySelector('p').textContent = `Error al conectar con la base de datos: ${error.message}`;
+        }
+    }
+    
+    // Función de espera activa para asegurar que Firebase se haya autenticado
+    function waitForFirebase() {
+        // Verificar las variables globales creadas en base.html: db, userId, y ready flag.
+        if (window.firebaseReady && window.userId && window.db) {
+            console.log("Firebase, Firestore (DB) y Usuario listos. Procediendo a cargar el historial.");
+            loadUserHistory();
+        } else {
+            // Reintentar cada 100ms hasta que el setup de base.html haya terminado
+            setTimeout(waitForFirebase, 100); 
+        }
+    }
+
+    // Iniciar el proceso de espera
+    waitForFirebase();
+
+</script>
+{% endblock %}

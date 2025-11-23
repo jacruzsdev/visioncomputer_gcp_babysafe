@@ -1,0 +1,177 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="text-center mb-0">Chat Baby Safe</h2>
+    <button id="btn-new-chat" class="btn btn-outline-danger btn-sm">
+        🗑️ Nueva Conversación
+    </button>
+</div>
+
+<div id="chat-box" class="chat-box">
+    <!-- Contenido cargado por JS -->
+    <div class="message bot-msg">
+        <strong>IA:</strong> Esperando autenticación...
+    </div>
+</div>
+
+<form id="chat-form" class="row g-2 align-items-center mt-3">
+    <div class="col-md-7">
+        <input type="text" id="mensaje" class="form-control" placeholder="Escribe tu mensaje aquí...">
+    </div>
+    <div class="col-md-3">
+        <input type="file" id="imagen" class="form-control" accept="image/*">
+    </div>
+    <div class="col-md-2 d-grid">
+        <button type="submit" class="btn btn-primary">Enviar</button>
+    </div>
+</form>
+
+<script type="module">
+    import { collection, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    const form = document.getElementById('chat-form');
+    const chatBox = document.getElementById('chat-box');
+    const btnNewChat = document.getElementById('btn-new-chat');
+    const STORAGE_KEY = 'chat_session'; // Clave para la conversación en vivo (local)
+
+    // --- FUNCIONES DE PERSISTENCIA LOCAL (CONVERSACIÓN EN VIVO) ---
+
+    function saveToLocalStorage(role, text, imgUrl = null) {
+        let history = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        history.push({ role, text, imgUrl });
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+    }
+
+    function renderMessage(role, text, imgUrl = null) {
+        const cssClass = role === 'user' ? 'user-msg' : 'bot-msg';
+        const label = role === 'user' ? 'Tú' : 'IA';
+        let contentHtml = `<div class="message ${cssClass}">`;
+        contentHtml += `<strong>${label}:</strong> ${text}`;
+        
+        if (imgUrl) {
+            contentHtml += `<br><img src="${imgUrl}" class="chat-img" alt="Adjunto">`;
+        }
+        contentHtml += `</div>`;
+        chatBox.innerHTML += contentHtml;
+    }
+
+    function loadLocalChat() {
+        const savedChat = localStorage.getItem(STORAGE_KEY);
+        chatBox.innerHTML = '';
+        if (savedChat) {
+            JSON.parse(savedChat).forEach(msg => renderMessage(msg.role, msg.text, msg.imgUrl));
+        } else {
+            renderMessage('Agente', 'Hola. Soy Baby Safe, mi objetivo es procesar tus imagenes para ayudarte a entender si el entorno es seguro o no para tu bebé');
+        }
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    // --- FUNCIÓN DE GUARDADO EN FIRESTORE (HISTORIAL PERMANENTE) ---
+
+    async function saveToFirestore(mensaje, imgUrl, respuestaIA) {
+        if (!window.firebaseReady) {
+            console.error("Firebase no está listo. No se pudo guardar el historial.");
+            return;
+        }
+
+        const path = `/artifacts/${window.appId}/users/${window.userId}/historial_analisis`;
+        try {
+            await addDoc(collection(window.db, path), {
+                mensaje_usuario: mensaje,
+                imagen_url: imgUrl,
+                respuesta_modelo: respuestaIA,
+                fecha: new Date().toISOString(),
+                userId: window.userId
+            });
+            console.log("Historial guardado en Firestore de forma privada.");
+        } catch (e) {
+            console.error("Error al guardar en Firestore:", e);
+        }
+    }
+
+    // --- EVENTOS ---
+
+    // Esperar a que Firebase y el userId estén listos
+    window.onload = () => {
+        if (window.firebaseReady) {
+            loadLocalChat();
+        } else {
+            // Fallback si la autenticación es lenta
+            setTimeout(loadLocalChat, 2000); 
+        }
+    };
+
+    btnNewChat.addEventListener('click', () => {
+        if(confirm("¿Deseas borrar esta conversación y empezar una nueva?")) {
+            localStorage.removeItem(STORAGE_KEY);
+            loadLocalChat();
+        }
+    });
+
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const msgIn = document.getElementById('mensaje');
+        const imgIn = document.getElementById('imagen');
+        const texto = msgIn.value.trim();
+        const archivo = imgIn.files[0];
+        const tieneImagen = !!archivo;
+        
+        if(texto === "" && !archivo) {
+            alert("Escribe un mensaje o selecciona una imagen.");
+            return;
+        }
+
+        // 1. Mostrar mensaje del usuario y guardar en LocalStorage (conversación en vivo)
+        const tempImgUrl = archivo ? URL.createObjectURL(archivo) : null;
+        renderMessage('user', texto, tempImgUrl);
+        saveToLocalStorage('user', texto, tempImgUrl); // Usamos URL temporal aquí
+        chatBox.scrollTop = chatBox.scrollHeight;
+
+        // 2. Llamada a la API de Django (Simulación IA)
+        const fd = new FormData();
+        fd.append('mensaje', texto);
+        fd.append('tiene_imagen', tieneImagen ? 'True' : 'False');
+
+        if (tieneImagen) {
+            fd.append('imagen', archivo);  // <--- Aquí envías el archivo al backend
+        }
+
+        try {
+            const res = await fetch("{% url 'procesar_chat' %}", {method: 'POST', body: fd});
+            const data = await res.json();
+            
+            if(data.status === 'ok') {
+                const respuestaIA = data.respuesta;
+                let finalImgUrl = null;
+                
+                if(tieneImagen) {
+                    // Simulación: Si se subió imagen, la URL "real" sería la temporal para fines de persistencia local
+                    finalImgUrl = tempImgUrl; 
+                    
+                    // 3. Guardar solo el registro con imagen en Firestore (Historial privado)
+                    // Nota: En un entorno real, la imagen se subiría a Cloud Storage primero. Aquí usamos la URL temporal.
+                    saveToFirestore(texto, finalImgUrl, respuestaIA);
+                }
+                
+                // 4. Mostrar y guardar respuesta de la IA en LocalStorage
+                renderMessage('ia', respuestaIA);
+                saveToLocalStorage('ia', respuestaIA);
+
+            } else {
+                alert("Error de la IA: " + data.mensaje);
+            }
+        } catch (err) {
+            console.error("Error en la comunicación:", err);
+            alert("Error de conexión con el backend.");
+        }
+
+        // Limpiar campos
+        msgIn.value = '';
+        imgIn.value = ''; 
+        chatBox.scrollTop = chatBox.scrollHeight;
+    });
+</script>
+{% endblock %}
